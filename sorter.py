@@ -1,148 +1,192 @@
 import os
 import shutil
 import tkinter as tk
-from tkinter import filedialog, messagebox
-from tkinter import ttk
+from tkinter import filedialog, messagebox, ttk
+from tkinter.font import Font
 
+# ========================= CONFIG =========================
 APP_TITLE = "Auto Sort Pro v1.0"
+APP_VERSION = "1.0"
 
+# Colors
 BG_COLOR = "#0f172a"
 FG_COLOR = "#e5e7eb"
 BTN_COLOR = "#2563eb"
+SUCCESS_COLOR = "#16a34a"
+DANGER_COLOR = "#dc2626"
+WARNING_COLOR = "#f59e0b"
+ACCENT_COLOR = "#64748b"
 
+# ========================= HELPERS =========================
 def get_downloads_folder():
+    """Return the user's Downloads folder path."""
     return os.path.join(os.path.expanduser("~"), "Downloads")
 
-def sort_files(folder_path):
+
+def get_file_category(filename: str) -> str:
+    """Return category folder name based on file extension."""
+    ext = filename.split(".")[-1].lower() if "." in filename else "unknown"
+    
+    categories = {
+        "mp3": "Music",
+        "jpg": "Photos", "jpeg": "Photos", "png": "Photos", "gif": "Photos",
+        "mp4": "Videos", "avi": "Videos", "mkv": "Videos", "mov": "Videos",
+        "pdf": "Documents", "doc": "Documents", "docx": "Documents",
+        "txt": "Documents", "xlsx": "Documents", "csv": "Documents",
+        "zip": "Archives", "rar": "Archives", "7z": "Archives",
+    }
+    
+    return categories.get(ext, "Others")
+
+
+def sort_files(folder_path: str):
+    """Sort files in the given folder into category subfolders."""
+    if not os.path.exists(folder_path):
+        return 0
+
     files = [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f))]
     total_files = len(files)
 
     if total_files == 0:
         return 0
 
-    output_folder = os.path.join(folder_path, "Sorted")
-    os.makedirs(output_folder, exist_ok=True)
+    sorted_folder = os.path.join(folder_path, "Sorted")
+    os.makedirs(sorted_folder, exist_ok=True)
 
     count = 0
 
     for file in files:
         file_path = os.path.join(folder_path, file)
-        ext = file.split(".")[-1].lower()
-
-        if ext == "mp3":
-            category = "Music"
-        elif ext in ["jpg", "jpeg", "png"]:
-            category = "Photos"
-        elif ext in ["mp4", "avi", "mkv"]:
-            category = "Videos"
-        else:
-            category = "Others"
-
-        target_folder = os.path.join(output_folder, category)
+        category = get_file_category(file)
+        
+        target_folder = os.path.join(sorted_folder, category)
         os.makedirs(target_folder, exist_ok=True)
 
         try:
             shutil.move(file_path, os.path.join(target_folder, file))
             count += 1
-
-            progress = int((count / total_files) * 100)
-            progress_bar["value"] = progress
-            status_label.config(text=f"Sorting... {progress}%")
-            app.update_idletasks()
-        except:
-            pass
+        except Exception:
+            continue  # Skip files that can't be moved
 
     return count
 
-# 🔄 UNSORT FUNCTION
-def unsort_files(folder_path):
-    sorted_folder = os.path.join(folder_path, "Sorted")
 
+def unsort_files(folder_path: str):
+    """Move all files from Sorted/ subfolders back to main folder."""
+    sorted_folder = os.path.join(folder_path, "Sorted")
+    
     if not os.path.exists(sorted_folder):
         return 0
 
     count = 0
 
-    for root, dirs, files in os.walk(sorted_folder):
+    for root, _, files in os.walk(sorted_folder):
         for file in files:
             file_path = os.path.join(root, file)
             try:
                 shutil.move(file_path, os.path.join(folder_path, file))
                 count += 1
-            except:
-                pass
+            except Exception:
+                continue
+
+    # Remove empty Sorted folder
+    try:
+        os.rmdir(sorted_folder)
+    except OSError:
+        pass  # Folder not empty
 
     return count
 
-def run_sort(folder):
-    progress_bar["value"] = 0
-    status_label.config(text="Sorting...")
-    app.update_idletasks()
 
-    total = sort_files(folder)
+# ========================= UI =========================
+class AutoSortApp:
+    def __init__(self):
+        self.app = tk.Tk()
+        self.app.title(APP_TITLE)
+        self.app.geometry("460x420")
+        self.app.configure(bg=BG_COLOR)
+        self.app.resizable(False, False)
 
-    status_label.config(text="Done!")
-    messagebox.showinfo("Success", f"{total} files sorted!")
+        self.setup_ui()
 
-def run_unsort(folder):
-    progress_bar["value"] = 0
-    status_label.config(text="Restoring...")
-    app.update_idletasks()
+    def setup_ui(self):
+        # Title
+        title_font = Font(family="Segoe UI", size=18, weight="bold")
+        tk.Label(self.app, text="Auto Sort Pro", font=title_font,
+                 bg=BG_COLOR, fg=FG_COLOR).pack(pady=20)
 
-    total = unsort_files(folder)
+        # Buttons
+        btn_width = 28
+        btn_height = 2
 
-    status_label.config(text="Restored!")
-    messagebox.showinfo("Done", f"{total} files restored!")
+        tk.Button(self.app, text="📁 Select Folder to Sort", width=btn_width, height=btn_height,
+                  bg=BTN_COLOR, fg="white", font=("Segoe UI", 10),
+                  command=self.select_and_sort).pack(pady=8)
 
-def select_folder():
-    folder = filedialog.askdirectory()
-    if folder:
-        run_sort(folder)
+        tk.Button(self.app, text="⚡ Auto Scan Downloads", width=btn_width, height=btn_height,
+                  bg=SUCCESS_COLOR, fg="white", font=("Segoe UI", 10),
+                  command=self.auto_scan_downloads).pack(pady=8)
 
-def auto_scan():
-    downloads = get_downloads_folder()
-    run_sort(downloads)
+        tk.Button(self.app, text="🔄 Unsort Selected Folder", width=btn_width, height=btn_height,
+                  bg=DANGER_COLOR, fg="white", font=("Segoe UI", 10),
+                  command=self.select_and_unsort).pack(pady=8)
 
-def auto_unsort():
-    downloads = get_downloads_folder()
-    run_unsort(downloads)
+        tk.Button(self.app, text="↩️ Restore Downloads", width=btn_width, height=btn_height,
+                  bg=WARNING_COLOR, fg="white", font=("Segoe UI", 10),
+                  command=self.restore_downloads).pack(pady=8)
 
-# UI
-app = tk.Tk()
-app.title(APP_TITLE)
-app.geometry("420x340")
-app.configure(bg=BG_COLOR)
+        # Progress Bar
+        self.progress = ttk.Progressbar(self.app, orient="horizontal", 
+                                       length=380, mode="determinate")
+        self.progress.pack(pady=20)
 
-title_label = tk.Label(app, text="Auto Sort Pro",
-                       font=("Segoe UI", 16),
-                       bg=BG_COLOR, fg=FG_COLOR)
-title_label.pack(pady=15)
+        # Status
+        self.status = tk.Label(self.app, text="Ready to organize your files", 
+                               bg=BG_COLOR, fg="#94a3b8", font=("Segoe UI", 10))
+        self.status.pack(pady=5)
 
-# Buttons
-tk.Button(app, text="Select Folder", width=22, height=2,
-          bg=BTN_COLOR, fg="white",
-          command=select_folder).pack(pady=5)
+        # Footer
+        tk.Label(self.app, text=f"v{APP_VERSION} • Made by Benjie", 
+                 bg=BG_COLOR, fg=ACCENT_COLOR, font=("Segoe UI", 9)).pack(side="bottom", pady=15)
 
-tk.Button(app, text="Auto Scan Downloads", width=22, height=2,
-          bg="#16a34a", fg="white",
-          command=auto_scan).pack(pady=5)
+    def update_status(self, text: str, progress_value: int = None):
+        self.status.config(text=text)
+        if progress_value is not None:
+            self.progress["value"] = progress_value
+        self.app.update_idletasks()
 
-# 🔄 Unsort buttons
-tk.Button(app, text="Unsort Selected Folder", width=22, height=2,
-          bg="#dc2626", fg="white",
-          command=lambda: run_unsort(filedialog.askdirectory())).pack(pady=5)
+    def select_and_sort(self):
+        folder = filedialog.askdirectory()
+        if folder:
+            self.update_status("Sorting files...", 0)
+            total = sort_files(folder)
+            self.update_status("Sorting completed!", 100)
+            messagebox.showinfo("Success", f"{total} files successfully sorted!")
 
-tk.Button(app, text="Restore Downloads", width=22, height=2,
-          bg="#f59e0b", fg="white",
-          command=auto_unsort).pack(pady=5)
+    def auto_scan_downloads(self):
+        downloads = get_downloads_folder()
+        self.update_status("Scanning Downloads folder...", 0)
+        total = sort_files(downloads)
+        self.update_status("Sorting completed!", 100)
+        messagebox.showinfo("Success", f"{total} files sorted from Downloads!")
 
-progress_bar = ttk.Progressbar(app, orient="horizontal", length=300, mode="determinate")
-progress_bar.pack(pady=15)
+    def select_and_unsort(self):
+        folder = filedialog.askdirectory()
+        if folder:
+            self.update_status("Restoring files...", 0)
+            total = unsort_files(folder)
+            self.update_status("Files restored!", 100)
+            messagebox.showinfo("Done", f"{total} files restored to original location.")
 
-status_label = tk.Label(app, text="Status: Waiting",
-                        bg=BG_COLOR, fg="#9ca3af")
-status_label.pack(pady=10)
+    def restore_downloads(self):
+        downloads = get_downloads_folder()
+        self.update_status("Restoring Downloads...", 0)
+        total = unsort_files(downloads)
+        self.update_status("Restore completed!", 100)
+        messagebox.showinfo("Done", f"{total} files restored from Downloads!")
 
-tk.Label(app, text="by Benjie", bg=BG_COLOR, fg="#6b7280").pack()
 
-app.mainloop()
+# ========================= RUN APP =========================
+if __name__ == "__main__":
+    app = AutoSortApp()
+    app.app.mainloop()
